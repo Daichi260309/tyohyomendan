@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>帳票返却面談（フラッシュカード）</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  :root {
+    --teacher-bg: #DCF8C6;
+    --student-bg: #FFFFFF;
+    --page-bg: #ECE5DD;
+    --header-bg: #075E54;
+    --part-bg: #FFF3CD;
+    --part-border: #E6A817;
+    --shadow: rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: var(--page-bg); color: #111; min-height: 100vh; }
+
+  header {
+    background: var(--header-bg);
+    color: #fff;
+    padding: 12px 16px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .header-top { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; }
+  .avatar.t { background: #25D366; }
+  .avatar.s { background: #34B7F1; margin-left: -8px; border: 2px solid var(--header-bg); }
+  .info { flex: 1; }
+  .info .name { font-size: 14px; font-weight: 700; line-height: 1.3; }
+  .info .sub { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+  .controls {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  .controls button {
+    background: #25D366; color: #fff; border: none; border-radius: 16px;
+    padding: 5px 14px; font-size: 12px; font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 700; cursor: pointer; transition: background 0.15s;
+  }
+  .controls button:hover { background: #1ea055; }
+  .controls button.ghost {
+    background: rgba(255,255,255,0.18); color: #fff;
+  }
+  .controls button.ghost:hover { background: rgba(255,255,255,0.32); }
+  #count { font-size: 12px; color: rgba(255,255,255,0.75); margin-left: auto; }
+
+  .chat-window { max-width: 780px; margin: 0 auto; padding: 16px 12px 40px; display: flex; flex-direction: column; gap: 6px; }
+
+  .part-divider {
+    background: var(--part-bg); border-left: 4px solid var(--part-border);
+    border-radius: 6px; padding: 10px 16px; margin: 16px 0 6px;
+    font-size: 13px; font-weight: 700; color: #7a5a00; text-align: center;
+    box-shadow: 0 1px 4px var(--shadow);
+  }
+
+  .row { display: flex; align-items: flex-end; gap: 8px; }
+  .row.teacher { flex-direction: row-reverse; }
+
+  .bubble-avatar { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-bottom: 2px; }
+  .bubble-avatar.t { background: #25D366; color: #fff; }
+  .bubble-avatar.s { background: #34B7F1; color: #fff; }
+
+  .bubble-wrap { display: flex; flex-direction: column; max-width: 72%; }
+  .row.teacher .bubble-wrap { align-items: flex-end; }
+  .row.student .bubble-wrap { align-items: flex-start; }
+
+  .bubble-name { font-size: 11px; font-weight: 500; color: #555; margin-bottom: 3px; padding: 0 4px; }
+
+  /* === FLASHCARD === */
+  .bubble.card {
+    padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.7;
+    box-shadow: 0 1px 3px var(--shadow); word-break: break-word;
+    cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: box-shadow 0.15s;
+    min-width: 80px; min-height: 38px; position: relative;
+  }
+  .bubble.card:active { box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .row.teacher .bubble.card { background: var(--teacher-bg); border-bottom-right-radius: 3px; }
+  .row.student .bubble.card { background: var(--student-bg); border-bottom-left-radius: 3px; }
+
+  .card-text { display: none; }
+  .card-hint { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; color: #aaa; font-style: italic; padding: 2px 0; }
+
+  /* revealed */
+  .bubble.card.revealed .card-text { display: block; }
+  .bubble.card.revealed .card-hint { display: none; }
+
+  /* show-all mode */
+  body.show-all .card-text { display: block !important; }
+  body.show-all .card-hint { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div style="display:flex">
+      <div class="avatar t">師</div>
+      <div class="avatar s">生</div>
+    </div>
+    <div class="info">
+      <div class="name">全国統一高校生テスト 6月 成績帳票返却面談</div>
+      <div class="sub">先生（右・緑）　／　生徒A君（左・白）　｜　フラッシュカードモード</div>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="btn-show-all">全て表示</button>
+    <button id="btn-reset" class="ghost">全て隠す</button>
+    <span id="count"></span>
+  </div>
+</header>
+
+<header>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div class="avatar t">師</div>
+    <div class="avatar s" style="margin-left:-10px;border:2px solid #075E54;">生</div>
+  </div>
+  <div class="info">
+    <div class="name">全国統一高校生テスト 6月 成績帳票返却面談</div>
+    <div class="sub">先生（右・緑）　／　生徒A君（左・白）</div>
+  </div>
+</header>
+
+<div class="chat-window">
+
+<div class="part-divider">▶ パート１【00:00〜09:20】アイスブレイク（9分20秒）</div>
+
+<!-- P1 -->
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">A君、こんにちは。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">こんにちは。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まず、今日来てくれてありがとうね。今回はA君の帳票返却面談を担当させてもらう〇〇です。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">よろしくお願いします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まず改めて、忙しい中本当に来てくれてありがとうね。普段は部活動とかで結構忙しいんじゃない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、部活結構忙しいですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">忙しいか。何部に入ってるんだっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">自分はサッカー部に入っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">サッカー部はかなり忙しいよね。そんな中、しっかりとこの帳票の返却面談に来てくれて、本当にありがとうね。成績表が今日返却されるということで、多分聞いてきたよね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">最初、今A君がどんな気持ちでここにいてくれるのかをちょっと知りたいんだけど、率直に今どんな気分？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、結構緊張していますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構緊張している。その緊張というのは、もうちょっと深く掘ると、どうして緊張している？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">自分の成績を見て、色々話をしていくというので、色んなことを言われるんじゃないかと怖かったりというのはありますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">色んなことを言われるんじゃないかと思っているんだね。それは結構ネガティブなことという意味合い？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なるほどね。それは緊張するよね。ちゃんと言ってくれてありがとうね。まず、今不安や緊張を感じていると言ってくれたから、それに対して僕はまず一つ伝えたいのだけど、A君が今ここに来てくれている、その勇気が本当に素晴らしいと思うよ。やっぱり不安や緊張を感じながらも、しっかり面談をするぞと思って来てくれるから、本当にそれが素晴らしいと思っている。<br><br>実際のところ、今日の面談はA君を否定したり、何か指摘したりする面談では当然なくてね。むしろすごく楽しくて役に立つ面談を、今日していきたいと思っているから、大丈夫だよ。<br><br>面談の中身に入る前にもう一つ聞いておきたいんだけど、今回、この「全国統一高校生テスト」を受けてくれたよね。このテスト、A君ってなんで受験してみようかなと思ったのか、聞いてもいい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、家に案内が届いて、無料の模試だから受けてみたらという風に親にも言われたので、ちょっとそれで受けてみようかなという風になりました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">お家に案内が届いて、保護者の方から紹介されてたんだね。素晴らしい。無料とはいえ、なんで申し込もうと思ったの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、高校2年生にもなったので、自分の実力をしっかりと知ることも大事なのかなと思いましたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">めちゃくちゃ素晴らしいんですよ。自分の実力を、受験に向けて把握しようかなと思ったんだね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしいじゃない、ありがとうございます。なかなかその決断ってできないと思うんだよね。やっぱりサッカー部とかで忙しかったら、「模試は別に受けなくていいかな」となる人もたくさんいると思うからさ。<br><br>だからまず、ちゃんと受けてみたということが素晴らしいと思うよ。しかもちゃんと、受験前説明会に来て説明を1時間くらい聞いて、その上で受けたんでしょ。なかなかみんながができることじゃないんじゃないと思うよ。<br><br>だから、その一歩を踏み出して動いてみたということが素晴らしいから、そこはまず自信を持ってほしいなと思ったんだよね。もう少しだけ聞きたいんだけど、自分の成績や学力を把握した方がいいかなと思ったのは、受験を頑張りたいという気持ちが結構強いの？教えてもらってもいい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、やっぱりそろそろ受験のことを意識しなきゃというのは、高校2年生になって、学校の先生とかもすごいこう話をしてくださったりするので、はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そっか、結構高2になって特に意識してきたんだね。高1の時はどうだったの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いやー、もう高1の時は部活とか、遊びとかを全力で、という感じでしたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね。で、高2になってやっぱりちょっと意識が湧いてきたんだね。この後、面談で目標とか色々聞きたいなとはおもっているんだけど、行きたい大学とかってあるの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、一応今の段階では、東京科学大学を考えているという感じですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしい！東京科学大学に行きたいんだね。ちゃんと目標も持っていて、その第一歩となる、統一テストを受けたという踏み出した行動は本当に素晴らしいと思うよ。そういう意味でも、今は緊張していると言ってくれたけれど、今日面談が終わる頃には、「あ、なんか今日来て良かったな」と思っていただけるように、ちゃんと面談していきたいと思っているから大丈夫だよ。<br><br>A君にとって実りある面談にするために、この面談って何が目的なのか、ゴールの確認を一緒にしようかなと思います。<br><br>A君は受験前説明会に出てくれたよね。その時の話で、「東進模試は何のために受けるか」とか、そういう話が多分あったと思うんだよね。この辺覚えているか確認してもいいかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">学力を測るだけじゃなくて、合格するために受けるんだよ、みたいな話をされた気がします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">お、ちゃんと覚えているね。それ聞いてどう思った？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">今までは、意外と自分の成績を見て終わっちゃっていたな、というのは思いましたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね、見て終わっていたんだ。まさに東進模試は、合格するための模試だと我々は思っているんだよね。<br><br>合格するため、というのは、今言ってくれたように、測って終わるんじゃなくて、「A君は何ができているんだろう、何が課題なんだろう」ということを明確にする。そして、それを対策していくことが大事だと思っているんだ。ここでA君に、受験前説明会でも見たかもしれないんだけど、改めてこちらを紹介させてね。スライドで見せます。これは何かというと、今年の共通テストの、一般生と東進生の平均点差というデータです。一般生というのは東進に通っていなかった生徒。緑色のグラフが東進生です。国公立の受験って、何点満点か知っている？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">1000点満点。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうそう、6教科8科目、1000点満点ね。で、平均がどうだったかという差がこれなんだけど、この「102.5点」というのが今年の差だったんだよね。これ、単純に自分の思うことでいいんだけど、1000点満点中での102点と聞いてどう思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">すごい大きな差がついたんだな、という風に思いました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう思ってくれる。我々もももっと伸ばしたいとは思っているんだけど、今平均で100点差くらいついているんだよね。じゃあ、もう一ついくよ。もう少し突っ込んで、この「東進ハイスクール」の生徒と一般生の差。これは東進ハイスクールという直営校に限定して点数差を出すと、何点くらいだったか知っている？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なんか、140点くらいですか？</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、そうなんだよ。これ、「141.7点差」なんだよね。この点数差はどう思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、やっぱり100点というのと比べても、もっと大きな差だなというのは思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね。結構大きな差だよね。要はここに10人の東進生がいたら、みんな一般生より140点分上乗せして点数を持っている、ということにはなるからさ。141.7点という差があると、大学のレベルがどれくらい変わるかイメージは湧く？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、あまりイメージ湧かないです。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あんまり湧かないよね。紹介すると、このくらいのイメージなんだよね。例えば、もちろん優秀な大学だけど「山梨大学工学部」。これが140点上がると、「横浜国立大学の理工学部」くらいまで上がる。横浜国立大学って知ってる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">知ってます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうそう、関東で人気で有名な大学なんだけど。横浜国立大学からさらに140点上昇すると、今度は東大になるんだよ。このくらい、かなり受けられる幅も狙える幅も変わってくるというのが140点なんだ。<br><br>では今度、140点差ってなんでこういう差がついているのか知りたくない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確かに気になります。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まさに、東進模試は合格するために必要な模試だと伝えたけど、これなんだよ。まず、成績表返却が一か月後とかではなく、試験後すぐに返す。今回は、試験が終わって今何日後？大体まだ1週間経たないくらいだよね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、すぐに返す。これ、1ヶ月以上経ってから偏差値とかを見てもしょうがないかなと思ってる。そして、返されたら、さっきの復習だけど何をしなきゃいけないんだっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">しっかりと自分の出来ているところとか、課題を見つけていく。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">正解、そうそう。何がちゃんと出来ていて、出来ていないか。やっぱり出来ていないことにも優先順位があるから、まずはA君が何を勉強していくべきなのかを、こういう面談で、東進の生徒もそうなんだけど、しっかりと決めていく。そして、プランを作った後は何をやらなきゃいけない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そのプランを実行していく。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう正解。行動することだよね。この「See（現状把握）」「Plan（計画）」「Do（実行）」という、成果を出すために絶対必要な生テストをせっかく受けてくれたから、「See・Plan・Do」を体験してほしいと思ってね。今回の帳票返却面談では、「See」と「Plan」。何をやっていけば伸びていくのか、ここまでの計画を今日の面談でやります。そして、A君が必要だと思ったら、受験前説明会でも説明があったと思うんだけど、「夏期特別招待講習」というので、具体的に、すぐに効率よく対策することもできるんだよね。だからそこを、今日計画するところまで面談をやれればなと思っているんだ。大丈夫そうかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">大丈夫？じゃあ今日は、A君の学力がガーッと伸びていくように、僕も本気でこう考えながら面談するから、A君も何でも遠慮なく相談してね。もうなんか、この時間は担任の先生だと思ってくれていいから。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、わかりました。</span></div></div></div>
+
+<!-- パート2 -->
+<div class="part-divider">▶ パート２【09:21〜12:05】志望校（2分34秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まず点数とかの話の前に、大切な志望校だよね。ここを改めてちょっと掘り下げていきたいなと思うので、その確認をしていきたいと思います。A君の志望校に関して色々話を聞きたいなと思っています。さっき「決まってる」と言っていたもんね。改めて、A君が行きたいなと思っている、憧れの志望校はどこだっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">東京科学大学です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">東京科学大学、ちゃんと決まっているのが素晴らしいね。僕も成績を実は事前に少し見せてもらった時に、東京科学大学志望って書いてあったからさ。これはどのくらいの気持ちで書いてくれたのかなということは、実はちょっと気になっていたんだけど、そこちょっと答えてもらっていい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構頑張って目指したいな、という風な気持ちで今考えています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしい。科学大学って言った時の表情も明るいもんね。じゃあ、東京科学大学に行きたい理由を聞いてもいいかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">理系のトップの大学だということと、あとは具体的にこういうことがやりたい、というのはまだ明確には決まっていない状態なんですけど、ただ、それこそ東京工業大学と医科歯科大学というところが合併して、色んなことができるようになった大学、みたいなのを調べたら出てきたりしたので、そういうのがすごく面白そうだなという風には今思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。確かに学べる幅が、二つがくっついた分、選べる選択肢も色々広がっているもんね。<br><br>僕もちょっと調べているんだけど、やっぱり今まで工学が強かった東京工業大学に、東京医科歯科大学が一緒になって、やはり今まで培ってきた医学とか歯学、こういった分野を組み合わせて、医療の分野に工学を応用して深めていくとか、そういった研究が強くなっているんだって。だから、再生エネルギーもそうだし、AIを使った医療技術の進歩とか色々ね。そういったところも、研究をどんどん深めていっているんだよね。そういう意味では、これから未来を作っていく産業を、どんな分野でも一通り研究できるよ、というのが東京科学大学の魅力だよね。すごい良いところだと思うよ。しかも周りはめちゃめちゃレベル高いからね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですよね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうそう。だからこそ、勉強する中で、将来何やりたいかなとか、自分の夢や志というのをA君に考えてもらって。それは東京科学大学であれば、学んでいったり実現できたりする学部があると思うからさ。東進生にも言っているんだけど、夢や志をしっかり深めながら、勉強していってほしいなと思います。受験が終わったら社会で活躍する人材だと思うからさ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そしたら、行きたいなという気持ちはすごい強いんだね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ、知っての通り一筋縄で合格できる大学ではないからこそ、今日はしっかりと作戦を立てましょう。今回受けてくれた全国統一高校生テストの成績を一緒に見ながらね、どうやって合格に行くかというところを、一緒にこれから考えたいと思います。準備できる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、大丈夫です。</span></div></div></div>
+
+<!-- パート3 -->
+<div class="part-divider">▶ パート３【12:06〜27:17】成績表分析（15分11秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあA君、いよいよ成績表を一緒に見て分析していこう。その前に、最初に二つほど伝えたいことがあって。<br><br>一つ目は、こういった成績表を見る時の心がけとして、みんな悪いところに目が向きがちというお話。学校のテストとか模試とか返ってきて、そんなことない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、そうですね。できなかったところばかり見ている気がします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構そうだよね。僕の担当の生徒もそうなんだよ。でも必ず、頑張ってできてきたところとかもあるから、「自分って何ができているのかな、あ、ここは僕できているじゃん。すごい。」と思うことも大事だよ。一方で、課題は課題として客観的に捉えれば、今後の成長の種みたいなもんだからさ。大丈夫そうかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、大丈夫です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">もう一個が、模試の説明で、今回A君は「高校2年生部門」というのを受けてくれたんだよね。これ何かというと、2年生なので、理科とかというよりは、英・国・数、主要科目をしっかり受けましょうという部門。基本的にはほとんど本番のレベルと一緒なんだけれども、少しだけ取り組みやすい問題を入れてあるというのが、今回の高2生部門になっているから。そこを認識した上で、一緒に成績を見ていこう。じゃあ見ていくんだけど、A君、自慢大会じゃないんだけど、「ここで点数取れました」というところを教えてほしい。どこかあった？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、国語の現代文は他よりは結構読めた感じはありました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">現代文ね。当たってるよ、素晴らしい。僕も事前に少し成績を見せてもらったんだけど、現代文かなりよくできていたよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">他に、ここ良かったんじゃないかな、というところはある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、あとはリスニングも割とできていたらなとは思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">リスニングね。リスニングは普段から得意なの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">うーん、そうですね、他に比べたらできる方かなという。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">さすがです。やっぱり自分の実力を分かっているということも大事なんだよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ見ていこうかな。これが成績表です。まず見ていくと、今言ってくれたところを見るとすごいね。リスニングの得点、100点中「71点」だよ。素晴らしいね。7割取っているんだよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">すごいね。あとは国語全体でも200点中「139点」はすごいね。ほぼ7割だからね、すごいじゃん。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">これを見て、今どんな気分ですか？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、良かったです。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">良かったなと思ったよね。現代文は110点中「79点」、71.8%。読解力あるね。これ、過去の読書習慣とか要因があるの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、やっぱり本読んだりとかは意外と好きで、ずっとやっていたなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしい習慣だね。読解力がある生徒は、英語とかちゃんと知識が固まって「読めます」となれば、読解力はもうあるから相当英語が伸びていくよ。他の科目にも波及するのが読解力だから、とても良いものを持っていると思うよ。一方でA君、成績を見て、ここが難しかったなとか、結構課題だったなという部分って、科目ベースで構わないんだけど、あったかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、数学の1A・2BCは理系なので、ちょっとここは頑張らなきゃなというのと、あとはリスニングに比べるとリーディング、ここもしっかりと伸ばさなきゃいけないなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なるほどね。英語と1Aと2BCか。今日は限られた時間にはなるので、全科目見るともしかしたら時間が足りなくなるかもしれないから、特に分析を深掘りしたいのは、今言ってくれた科目で大丈夫？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、リーディングと数学ですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ、そこを見ていこうかな。最初、英語見ていこうかな。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">【英語（リーディング）の分析】<br><br>まず英語の成績はこれだね。分野ごとの得点。ここでも、A君素晴らしいことがあってね。ここの「Cライン得点まで」って書いてあるこの欄、いくつか「達成」って書いてあるじゃない。これ、何か知っている？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、わからないですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">要はね、この東進の模試って、Cライン得点といって、この得点を達成してもらえると「ここの分野に関しては合格者が取っている得点を達成できているよ」という達成度を書いているんだよね。それを超えているところに達成ってついているんだよね。この分野がリーディングですでに2つあるんだよ。すごいじゃん。長文読解とパンフレットの読み取り。<br><br>あれ、もしかしたら現代文の力で、読解が得意なのかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんですかね。まあ、点数に表れているのであれば、嬉しいなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、本当にすごいよ。逆に、課題に感じる点とって、自分なりにはどう思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、前半の方に単語・文法・語法の問題とかが出ていたと思うんですけど、そこがうまく進まなかった気がします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">わかりました。この語法とか文法、単語とかのところか。確かに長文と比べると得点率が少し、課題があるのかな。じゃあ、このグラフを見てみて。これで見ても、確かにこの赤いヤツ（失点）が欠けているのが、特に大問3、文法・語法だね。確かに大問1も、もう一歩ちゃんと取っていけるといいよね。そういう意味では、どっちかというと知識面なのかな。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、単語とか文法とかの知識というのは、まだ全然身についていない気がしますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。ここを見ていくと、これは一問一問の正誤を表しているんだけど、確かに、この前半に、後で説明は細かくするけれど、ピンク色の問題（正解したかった問題）が偏っているんだよね。そういう意味では、確かに単語問題とかが多いね。じゃあ、一つここが課題という認識かな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、自分としてもあんまりできていなかったなというのは思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ聞きたいんだけど、単語、熟語、語法、文法は、どんな風に普段勉強していた？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、単語は学校で単語のテストみたいなのが毎週あったりするんですけど、それに向けて勉強していました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだ。テスト勉強はしていたんだね。じゃあ聞くけれど、いつからテスト勉強しているの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">前日に始めてます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">前日なんだね。そういう子多いよね。わかりました。前日だと、そのテストは合格点取れる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、テストは何でも合格点は取れています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">で、その後どうなる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いやー、なんかもうその後、どんどん忘れていっちゃっているかもしれないですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだね、短期で覚えたものは短期で消えていくんだよね。これを「短期記憶」というんだよね。長期記憶にするっていう話は聞いたことある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、はい、なんとなく。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">何度も繰り返し復習することによって、ずっと覚えていられる知識に変わっていく、これを「長期記憶」というんだよね。せっかく単語を勉強しているからこそ、長期記憶に変える勉強が大事かなと思います。<br><br>あとは、長文は結構できている分野もあったんだけど、長文に出てきた単語って、どのくらいパッと把握できた？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、わからない単語とか、なんか見たことあるんだけどな、みたいな単語も結構長文の中にはありましたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あったんだね。そういう単語って少し悩んじゃうみたいな感じなの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">こう悩んで、何だろうなと思いながら、思い出せるものも結構時間がかかっちゃったりとかというのはあります。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">単語の出てくるスピードね。頭の知識の引き出しからパッと出し入れができないと、なかなか長文で使えない知識になっちゃうよね。そういう意味ではね、単語テストはすごく有効ではあるんだけど、瞬発的に単語の問題を解いて覚えるという、勉強が効果的。普段はやってる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、全然普段はやっていないですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうしたら、これは後で、そういう勉強のやり方があるから紹介しようかなと思っています。他に課題と感じる部分ある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、やっぱり単語知識や文法・語法がないと、正直全然始まらないという気がするので。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ、結構つまずいている子も多いから、最後に文法に関して話そうか。文法って普段どんな風に勉強しているの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">学校の授業でワークがあって、一つ一つの文法の問題に合わせて、解き進めるみたいな勉強はいったんしてきました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。主に「解く」ということをやっているんだ。そうするとさ、ワークとか解いたけれど、文法に課題があるなというのは、なんでだと思うかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、なんか1個1個の文法の項目に合わせて、「これが出るぞ」とわかっていればできるんですけど。ただ、「これは何ですか」とランダムに聞かれたりするとわからなかったりします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">でも良い気づきだね、それね。「今日は仮定法だよ」と言われたらわかるけれど、ということだよね。じゃあ、大事な質問だから、難しいけど考えてほしいのだけど、なぜそうなってしまうと思う？範囲指定されていないと気づけないのは。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、1個1個の文法のより深い理解がもうちょっと必要なのかな。あとはワークも解きっぱなしで、復習があんまりできていなかったからかな、とは思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ復習しっかりしたいね。言ってくれたように、自分自身の深い理解って言ってくれたんだけど、自分からちょっとアドバイスね。自分の言葉でちゃんと文法の説明をできるようになるとね、それイコール「深い理解、忘れない知識」になっていく。<br><br>どこでもいいんだけど、例えば「分子構文を僕に説明できるかな」と言われたらどう？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、ちょっと自信ないですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構説明って難しいよね。分子構文って「ここはこういう文法です」とか「こういう風に作るんです」ということが、解説を僕にできるようになると、完璧。「分子構文の範囲だよ」と言われなくても見抜ける知識なんだよね、自分で発想できるから。だから、今東進の生徒にもそうやって説明をして、ちゃんと復習しなさいというのを言っていてさ。学習終了後面談といって、おうちに帰る前に「今日習ったこと説明して」ってやっているんだよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">へえ、そうなんですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">それで、着実に定着しているんだよね。だからね、勉強の仕方として覚えておいてほしいかな。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">わかりました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">文法を学んで、今度良かったら説明してよ、僕に。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、頑張ります。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やっていこう。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">【数学の分析】<br><br>次は数学だね。数学は振り返って、どこが課題だったりすると思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">数学はまず1Aだと、確率の分野ですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確率のところが、自分の中ではあんまりできなかったなと。ここは確かに、場合の数・確率が25点満点中8点なんだね。中身を見ていくと、A君ってすごいね、よく自分のことわかっているね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">場合の数は結構取れているけれど、確率になった瞬間にバツになっているからさ。すごい理解できているじゃん、自分を。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確率は何、どんな理由でできなかったかなと思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、結構基本的なことから抜けちゃっているのが、そもそも何やればいいんだろうって試験の問題を解いていた時もなっちゃいましたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確率になると、やっぱりちょっと難しいか。基礎概念の復習をもう一回やった方がいいみたいな感じ？それとも問題をバンバン解いた方がいいのかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">うーん、結構前にやった範囲だ、というのもあるので学校でも。なのでちゃんとこうやり直して、復習も必要ですし、やっぱりこうたくさん問題を解いた経験は、今まであまりできていなかったなとも思うので。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">わかりました。じゃあ、しっかり考え方を見直して、その後で大量に問題を解く、というステップを踏んでいくといいのかな。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確率は大学行っても使う分野だから、しっかり固めて得意にするといいと思うよ。入試でもよく出るしね。<br><br>数学1Aに関して、なんか聞きたいこととかはある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、大丈夫です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">大丈夫？じゃあ、最後に2BCだね。すごいじゃん、達成している単元あるよ。どこ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">数列は達成になっています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしい！数列得意なの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、今回はスムーズに解けて良かったなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構数列ってさ、分野的に苦手な子も多い範囲だから、これができているのはすごいね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございます。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ逆に、もっとここを強化したいなというところだとどこ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">一番難しかったなと思ったのは、三角関数です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やっぱり三角関数ね。ここも結構苦手な子も多いんだよね。ちょっとグラフを見ても、数列は振り切っていて、三角関数は確かに課題かもしれないね。ここは、どういうところが自分は弱いとか、穴があるなという感じなのかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、やっぱりこう色んな定理とか公式とかが出てくるのが多いじゃないですか。なんか全然それを覚えられていなかったな、という風に試験の問題を解いていて思いました。結構もう、頭の中から抜けちゃっているな、と思いました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ、その辺を覚え直したり、思い出すだね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、まずそこからやらないと、まだ全然できなさそうだなと。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ちなみにさ、一回覚えたのに頭から抜けちゃった理由ってさ、それを知ることって今後の勉強にも活きると思うんだよ。なんで頭から抜けちゃったな、という風に振り返ると思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、なんか他の科目とかとも同じなんですけど、やっぱりあんまりこう復習でそこの問題をもう一回たくさんやり直す、とかというのは全然できていなかったなと思いますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やっぱりそこの問題をやり直すのが弱かったか。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確かに、だから数学って習い終わった後の、結構問題を演習量がものを言うよね。使えるツールに全部していくというか。そういう意味では、習い終わって演習をしなければいけない部分が、ちょっと足りていないなと思う感じかな。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">でも自分で分析していて素晴らしいじゃん。今のだって補足くらいしかしていないからさ。自分でこうやって、課題を模試のために見つけていくということがすごく重要。じゃあA君、振り返ると最後さ、今いろいろ分析してきたけれど、英語と数学1Aと数学2BCで、それぞれ今自分が課題かなと思ったところをちょっとこと思い出しながら、ちょっと言ってもらってもいい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">英語は単語とか、あとは文法・語法の知識の部分をちゃんと身につける、というところが今自分の課題かなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">どんな勉強の仕方がポイントだよって説明したっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">こう繰り返し何度もやっていく、というので、こう短期記憶じゃなくてちゃんと長期記憶になるように、というところが大事かなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ次、数学1Aは？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">数学1Aは、特に確率の分野のところ。で、まあここもやっぱりこう、基本のところをちゃんと確認するのと、あとはこう問題をたくさん解くという。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">思い出して、問題を大量に解くと。じゃあ最後、2BCです。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">2BCだと、三角関数のところ。まあこれも確率と同じで、やっぱり定理とか公式とかをもう一回確認して、思い直してから、問題をたくさん解いていく。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">しっかりと整理できて素晴らしい。だから、今出てきたことをあとはしっかりと計画に落とし込んで、具体的にアクションをしていけば、確実に成績というのは伸びていくからね。このプロセスがすごく重要なんだ。冒頭で説明したことを、ここから実践したいと思っているんだよね。ちゃんと自分で分析できて素晴らしいと思いました。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございます。</span></div></div></div>
+
+<!-- パート4 -->
+<div class="part-divider">▶ パート４【27:18〜32:21】普段の学習（5分3秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ、ここからはね、しっかりとどうやって今の課題を克服するかという作戦立てをしたいと思います。作戦を立てるにあたって、今A君が普段日頃どんな勉強をしているのか、勉強習慣を知りたいなと思うので、その話を聞いていきたいと思います。ここまでの成績の分析を一緒にしてきたわけなんだけど、A君、すごいさ、自分自身で考えて勉強できているなという風に思ったのでね。聞きたいんだけど、今は、予備校とかって行っているんだっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、今、河合塾に通っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">今河合塾に行っているんだね。河合塾も有名で、みんな頑張っている予備校だよね。いつから通っているの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">高校1年生の冬くらいからですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">高校1年の冬くらいから通っているんだ。じゃあ、もう半年以上は過ぎたという感じかな。じゃあ、状況を聞きたいんだけど、科目は何に勉強を河合塾でやってる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">週1回、数学の授業を受けています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ、週1回数学をやっているんだ。数学の内容は、今までどんな範囲とか、レベル感の勉強をしていたのかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">基本的には学校を追いかけるような感じで、同じような範囲をずっと進めていく、という感じで勉強しています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。じゃあ極端にその先取りとかではなく、大体学校と同じくらいの進度。レベル的にも同じくらいですか？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、教科書の振り返りからちょっと上くらいのイメージです。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">数学を最初に始めたのは、理由があったの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">全然成績も良くなかった状況で、親から「そろそろ何かやった方がいいんじゃないか」という話があって。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。やっていてどう、身についているなとか、定着しているなという感覚はあるので。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、模試の結果だけ見ると、全然定着はできていなさそう、という感じはあるので。でも授業は分かりやすくて、というのはありますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。さっきね、自分でも「習い終わった後の演習を」という話はあったから、そこをしっかりやっていけば、もっともっと伸びていけそうだよね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">僕もちょっと指導の参考にさせてもらいたいから聞きたいんだけどさ、河合塾だと、模試後の分析とか、今後の勉強の計画立てとかって、なんかどんな風にやっているのかちょっと聞いてもいい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、割とこう自分で成績を見て分析だったりとか、振り返りをする、という感じのことが多いですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構じゃあ自分自身でやる、感じなんだね。担任と一緒にやったりはあまりないの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、まあ面談の機会もそんなにこう高頻度であるわけじゃないので。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構、普段から自分自身で分析をするというのは、大変なんじゃない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、結構大変だなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">せっかくの機会だからさ、普段感じる疑問とか悩み、どんどん言ってくれて大丈夫だからね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、わかりました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">この時間、有効活用してよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">今塾の話は聞いたけれど、勉強習慣の話。普段部活もあって忙しいと思うんだけど、どのくらい勉強しているの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いやー、もう部活がある日とかは、もう1時間やるかやらないかくらいのレベルですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">部活の日は意外となんだね。もっとやってそうだなと思ったから。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、もう結構疲れて帰って寝ちゃって、みたいな。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やっぱり結構疲れちゃうか。じゃあ、家直行で帰って寝ちゃうみたいな感じ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、学校の宿題とか、翌日の小テストの勉強を本当にちょっとだけやって寝る、くらいの感じになっています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">わかりました。じゃあ、部活がない日はどう？休みの日はあるんだっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、オフの日もあって、まあその時は、まあ1時間はさすがにできているかなと思うんですけど。ただ、そんなに長時間、という感じではできていないですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">わかりました。これはA君が思うように答えてくれていいんだけど、今部活がない日で約1時間くらいはやっている。で、部活がある日だとどうしても1時間やっていなくて、眠っちゃうことも多いという話だったんだけど、自分的には今、高校2年生の勉強量として現状どう思っているの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、正直全然まだ足りていないよな、とは思いますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。もっともっと頑張ればできるな、という感覚はあるの？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、時間的にはできるはずですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだ。ちゃんとそういうことを思っているのは偉いね。じゃあ、できる時間はあって、そこに一歩踏み出せていない理由は、自分の中で考えると、どんなところがこう思い当たる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やっぱり部活があって疲れちゃって、みたいなのを自分でも言い訳にしてできていないのかな、という。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだね。確かに、元々塾に行くとか、もしくは「もうこれをやるぞ」と明確に決めるとか、計画が立っているとやることが見えてさ、実践できるかもしれないね。ここからさ、せっかく面談させてもらったからさ、ぜひ受かってほしいからこそ、勉強量をどんどん引き上げていこうよ。やっぱり勉強の質も大事だけど、やっぱりまずは量を引き上げていかないと、質って上がっていかないから。その気持ちは大丈夫？ここから頑張っていこうかな、という気持ちはある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、まあやっぱり今日の模試の成績とか見ても頑張って、こう量を増やしていかなきゃいけないな、というのは今思っています。</span></div></div></div>
+
+<!-- パート5 -->
+<div class="part-divider">▶ パート５【32:22〜40:34】共通テスト体験受験の話・中間目標（8分12秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしい。じゃあ、ここから頑張って量も増やすぞという意識のA君に、受験で受かるために必要なこと、もちろん最終的な学力も大事だけど、「中間目標」が非常に大事なんだよね。ここからは中間目標として、何月にどのくらいの学力になっていれば、東京科学大学の合格が見込めるのか。データがあるからさ、それを紹介していくね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">お願いします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">大学受験ってさ、やっぱり期限との戦いだから、大事なことは中間目標を設定して、それをしっかりと超えていく、その努力をするのがすごい大事なんだ。中間目標って聞いて、受験前説明会で出た話があったと思うんだけど、覚えているかな？共通テストの「体験受験」ですか？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">共通テスト体験受験ですか？</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">素晴らしい、正解！じゃあ、共通テスト体験受験の話を確認していきましょう。このデータで話されていたよね。A君さ、これどういうグラフ、どういう結論のデータだったかって覚えている？ちょっと言える？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">入試1年前の共通テスト体験受験の点数というのが、1年後の合格率に関係してくる、という話でした。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">完璧、素晴らしい、正解！そうなんだよね。要はこれが言っているのは、今言ってくれた通りなんだけど、高校3年生も大事だけど、別に高3が勝負なわけではないよ、ということなんだ。結局、高1と高2の終わりまでの1月までの勉強量とか内容で、どこまで学力が高まったか、受かる確率ってもう見えているぞ、ということが決まってきているぞ、ということだよね。<br><br>だからここが大事なんだよね。で、じゃあここからあと何ヶ月だ、この1月まで。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あと7ヶ月ですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよ。だからまずA君に頭にしっかり置いてほしいのは、7ヶ月後の共通テスト体験受験で、絶対に東京科学大学に合格した先輩の平均を超える。これをやってほしいんだよね。<br><br>そうすると、東京科学大学に合格した先輩がどういう点数を取っていたのか、これをちゃんと把握しなきゃいけないよね。次のスライドで、ここにまとめました。ここの右側ね。じゃあ、ちょっと点数を見てもらって、A君が今回統一テストで取った点も載っているんだけど。さあ、目標得点と見比べてみてどうですか？感じることを言ってもらっていい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、英語と数学に関しては、結構いままだギャップがある状態です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">英語と数学のギャップが大きい。そうだね、さすがに合格者は結構強いよね。あとは、今回は受けていないけれど、理科とかに関してはどうかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、理科も高校2年生の1月の時点で、もう半分くらいは取れている状態なので、それを考えると、なかなか大変そうだなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだね、物理とかはもう55点とかになって、化学もまあ5割近くまで来ているもんね。だからここを絶対に達成する、ということがまず大事なんだよね。<br><br>これ考えた時にどう、A君自身、今自分の成績からここに絶対到達するんだよってなった時に、今どんな感想？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、頑張りたいなとは思いつつも、いや、正直なんか本当に届くのかなというのは。すごいこうギャップの大きさというところを感じるので、なんか、なかなか難しそうだなという風に今思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">お、ちょっと元気なくなっちゃったね（笑）。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、ちょっとこう、なかなか差があって、どうなんだろうなというのは悩ましいですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ちょっとこのままのペースでいくと、どうなる、難しそうかなという感じなんだ、そういう印象を持ったんだね。<br><br>やっぱりね、僕はそれを聞いて思ったのは、A君にはここまで話してきて、もう絶対に受かってほしいし、しっかり考えてさ、分析もできているから。正しいやり方でやっていけばね、達成絶対にできると思っているんだよ。だからこそ、A君にね、少し話をしたいんだけれども。何かというとね、まずね、グラフというか図だと思ってください、僕の手をね。大学受験って期限が決まった戦いじゃない？そうなると、大体あと1年と7ヶ月、8ヶ月後に入試本番を迎えるよね。横軸、さっきの同日体験受験のグラフだと思って、横軸が「今」と「じゃあ1年7ヶ月後」。東京科学大学に受かるために必要な学力というのは、基本的には一定なんだ。ここくらいまでの学力に到達すれば、というのはね。それはイメージ湧くかな？A君の今の学力も、今の時点ではこの統一テストの結果で一つ決まっているよね。ってことはさ、合格をするグラフを描くってなったら、ここの始点とここの終点をこう「ピーッ」と結ぶことだと思わない、学力的に？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね、こう伸ばしていってということだよね。じゃあ、横軸という期限が変わりません、目指す先の科学大のこの縦軸も変わりません。で、今ちょっと「厳しいかな」とか「このままだと苦しいかな」と思っているってことは、こう「ピーッ」と伸ばしていって、ギリギリここへの到達がちょっと難しいのかな、ってそんなイメージ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そんなイメージです。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そんなイメージか、オッケー。じゃあそこで冷静に聞くんだけど、A君、これをちゃんと合格をさせる、ということを考えた時に、変えられることって何だろう？変えられる「変数」は何ですか？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">うーん、そうですね。まあ一つはなかなかか点数も厳しいので、まあ志望校とかをちょっとどうするか考えなきゃいけないのかな、というのはちょっと思っちゃいましたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なるほどね、先にね、今そっちを言ってくれるのね。そうだよね。でもこれは絶対やってほしくないんだけど、まあ志望校を一つ下げて、A君の現状の伸びで届くところに下げていくのが一つだよね。これはやっぱり選んでほしくない。もう1個は？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあ自分自身の行動力をなんとか上げていくこと、その努力を上げていく。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね。多分このまま普通にいくと達成するこの成績の伸びというのを、もうちょっと急上昇でパパパパッと上がっていくように、ここの上げ幅をぐっと上げるということだよね。成長スピードを上げるみたいな。ってなるとやっぱり僕が思っているのが、この今まで通りのやり方でやっていくと、基本的には今まで通りの伸びで終わっていくわけよね。でも、もしそれでちょっと厳しいな、ギリギリ届かないと思うのであれば、やっぱりちょっとこのやり方とか、さっきの話だった「努力、量」をやっぱり変えていく。まあ、もしくはプラスアルファしていく、ということは大事だと思うんだよね。それによって、通常このままいけばこうなるなという伸びを、ぐっとこう引き上げていく。これをね、やっぱりやってほしいなと。ここはどう、自分自身、今の話を聞いて頑張ろうかと思える？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、志望校を変えるというよりは、自分自身の行きたい大学に向けて頑張れるようになりたいなと思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあ、そう思えるんだね。素晴らしいと思うよ。僕も絶対志望校を諦めないでほしいし、どうにかこの伸び幅をぐっと上げて、合格できる状態を作りたいと思ってね。じゃあ、それに向けた作戦を、実はしっかり今話し合いながらも考えたし、事前にも少し考えてきたんだけどさ。それをちょっと今から話していい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">お願いします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構、大事な作戦だからちょっと覚えておいてね。まず、1月の共通テスト体験でこれを絶対に超えていく、ここは大丈夫だよね。で、これを100%やり遂げようと思うと、7ヶ月後の1月を目指していては僕はダメだと思っていて、100%やり遂げるには。その手前でいつの目標に近いものを達成するかというと、これなんだ。8月。8月って、今から何ヶ月後？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">今から2ヶ月後ですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよ、2ヶ月後って聞いてどう？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構、距離近いなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">距離近いよね。ただね、ここの合格者平均点を超えていくということを、目標に設定したいなと思っている。じゃあA君、見てもらっていい？ここに8月の合格者平均点、東京科学大学のを調べて記載したんだけれども。この8月の点と1月の点を見比べて、どういう印象を受けるか話してもらっていい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、1月と8月で、どの科目もそんなに大きくは変わらないんだなと今思いました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">良いことに気づきました。これ不思議なんだけれども、意外と8月の時点の点数と、高2の1月の時点の点数ってあんまり大差ないんだよね。これってね、東京科学大学みたいな難関国公立だとね、ほとんどの学校を調べるとこうなるんですよ。これって言い換えるとどういうことになる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあ、高校2年生の1月でこう点数を取ろう、という風に目標を設定するというよりは、もっと前の段階で達成している人がやっぱり最後合格している、ということですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、やっぱりペース速くて、1月に取っている点数を8月くらいの時点で取れる学力を、つまり共通テストをある程度攻略できる学力をつけているってことなんだよね。だからここに設定して、これを超えるのがやっぱり大事かなという風に思って。これを超えられたら、1月超えられる可能性って高いと思うんだよね。なぜかというと、そんなに点数を向上していないから。大丈夫だよ。だからまず、この8月の目標得点をしっかり見て、ここを達成するという気持ちをまず持ってほしいなと。これが、作戦のまず一つ目です。中間目標の中間目標ね。</span></div></div></div>
+
+<!-- パート5続き -->
+<div class="part-divider">▶ パート５続き【40:35〜50:37】正解必須問題・標準偏差（10分2秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあ次、これをしっかり達成、あと2ヶ月しかない。やり上げようと思った時に、限られた時間で結果を出せる方法を取らないといけないと思うんだ。じゃあそれは何か、ここで紹介したいのが、「正解必須問題」。正解必須問題って何かというと、数学1Aのさっきの間違えた成績をね。大問ごと問題ごとに、一問一問これ正答率順に実は並び替えたデータがこれです。そう、だから上の方の見えるこれって優しい問題なんだ。例えば89.7%の方が正解できた問題です。で、下に行けば行くほど難しい問題。じゃあA君に聞くよ、復習をしようと思った時に、優先順位をつけるってなったら、ごめんね、当たり前の質問でも恐縮なんだけど、難しい問題と優しい問題、どっちから復習するのが効率良いですか？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">優しい問題ですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね、難問よりも優しい問題だよね。ってなったら、この正解必須問題って何かというとね、A君の今回の実力、学力的には、この正答率の問題は絶対にできたはずですよ、という問題にピンクのマーカーが引かれているんですよ。つまり、できなきゃいけなかった問題。これを、ちょっとした知識の漏れとか忘れちゃったとか、ケアレスミスで間違えた問題。どういう分野にちょっとピンクのマーカーがこれ引かれているかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">二次関数と、あとは場合の数と確率。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよね。で、これで例えば見ていくと、2点、3点、3点、ここだけで「8点分」が増えるんだよ。つまり、あんまり新しい概念を身につけなくても、しっかりと復習を完璧にちゃんとやって、そうだよなと確認すれば、8点分はすぐに伸びるよということが言える。これ結構効率良くない？ここをしっかりやった方が。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確かにそうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">で、下の問題はもちろん復習しちゃいけないとは言えないんだけど、やっぱり限られた時間で結果を上げるってなると、そういう優先順位って大事だからさ。これが正解必須問題。だからこの、勉強をまずはやってほしいなという風に思っていて。実はA君ね、正解必須問題かなりあったんだよね。あったというのは、英語、国語、数学で何点くらいあったかというのを調べたんだけど、これどのくらいあると思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">でも数学で8点分という感じで考えると、他にあと科目がある程度あるので、それで30点とか、それくらいですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう思うよね。後で細かい数字を教えるけれどね、70点近かったんだよね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あ、そうなんですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんです、大きくない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">70点いくと、結構大きいなと思いますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いいよね。そう、だからまずは正解必須問題をしっかりと復習して、完璧に身につけるというのが作戦の2つ目。大丈夫、ここまで？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、大丈夫です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあちょっとね、これにちょっと付随したお話で、合格判定に関してちょっとお話をするね。今回さ、これ判定が、A君の判定、偏差値が「59.1」。「E判定」でした。これを見てちょっと感想としてはどんな感想？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やっぱりこの時期だと、E判定でそんなに判定としては良くない状態だなと思いますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あー、本当に。まあちょっと悔しいなという感じ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">でね、ちょっとここで「E判定をD判定に持っていこう」という話をしたいのね。じゃあ見ていきたいんだけれども、ここでA君に、結論を先に言うとね、正解必須問題さっき言ったじゃない。すぐに点数に変わる正解必須問題をしっかりやり上げて勉強し直せば、判定が変わるよという話。Eを抜けてDになれるんだよね、割としかもすぐに。その話をします。じゃあちょっとここは覚えておいてね。A君さ、成績表のここに「標準偏差」というものが書いてあるんだけど、この言葉って聞いたことある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">言葉は聞いたことあります。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">どんな概念か知ってる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">数学でやった気がするんですけど、忘れてますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あ、本当に。まあ簡単に言うとね、点数とかデータのばらつきの問題でさ。どのくらいに散らばっているかな、受験生の点数が、というばらつきのことなんだよ。でね、もう1個大事な意味を持っていて、標準偏差というのが、ここに数字が書いてあるじゃん。この数字の点数が上がると、偏差値が10上がりますよ、こういう概念なんだよね。じゃあ今さ、ちょっと見てもらって、標準偏差なんて書いてある、英数国で？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">「95.4」</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">これが点数で上がると、偏差値が10上がるということなんだよね。ってことは、問題なんだけど、偏差値1上げるためには、何点が向上すれば大丈夫？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">9.5点？</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよ、そう、9.5点上がると偏差値が1上昇するんだよね。ここでちょっとこんなデータを調べてみました、見てくれる？今回のA君の偏差値が59.1。D判定を取るために必要だったのが今回は64.6なんだって。つまりその差って「5.5」。これが上がれば、偏差値が上がればDになっていた。じゃあ、さっきの標準偏差の概念を考えて、標準偏差が95.4ということはさっき計算してくれたね、9.5点上がれば偏差値が1向上する。つまり、A君が5.5偏差値を上げたいわけだから、D判定をとるために、9.5と5.5を掛け算して「52.25」。この点数が上がると、A君はD判定に変化していくんですよね。ということなんだよ。<br><br>で、見て。A君の正解必須問題、調べたんだ、英・数・国で何点分あるか。見て、何点？「76点」ってことはどういう結論かな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあこの正解必須問題のところができれば、判定を一つ上げられるってことですか。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、これどう、聞いて？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">すぐ復習して点数にできる部分で判定が上がるってなったら、頑張ったら行けそうだな、という感じがしますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、いけるよ。僕もそう思うんだよ。だから、これはさ、間違えた問題ではあるから、もちろんね、油断はしちゃいけないけれど、割とすぐに点数に変わる得点は76点あんだよ。油断はしちゃいけないけれど、ちゃんと勉強していけば、思い出してくれれば、割とそこをまずは優先的にやれば、ってそれができればD判定に繰り上がっていくよということなんだよね。ということはあと何点分、残されたのは？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あと20点分ですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう。2ヶ月で新たに問題ができる、という意味では、20点分できるようになれば目標達成できるわけよ。これどう、A君？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あと20点って聞いたら、結構頑張ったら行けるんじゃないかなと。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">頑張ればいけるよね、と思うんだよね。だから、やっぱりここで伝えたいのは、A君しっかり頑張っていけば、8月の模試でちゃんと目標得点突破して、それは1月の目標得点を突破することと、ほぼほぼほぼ同値くらいの関係性にあるからさ、それが達成できるってことなんよ。これどう、僕は結構個人的に希望が見えているんだけどさ、どう、自分は？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、そうですね。それが達成できるかも、と思ったらめちゃくちゃ嬉しいなと思いますし、頑張りたいなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">でしょ。だから全力で頑張ろう。さらに言うと、ここからチャンスが来るじゃない、勉強がたくさんできるチャンスが。部活動は忙しいけれど、勉強にもたくさん時間使えるよというチャンスが訪れるんだけど、わかるかな。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">夏休み、ですか。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよ、これビッグチャンスじゃない？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、A君ちなみに、高2の夏休みってさ、難関大学に受かる子はどのくらい勉強するかって知ってる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なー、どうですかね。なんか勉強の時間で見ると、結構やってそうだなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">結構やってそうだよね。これね、参考までに東進生にはこう話しているよ、と。やっぱり合格したかったら、高2の夏は超勝負だから、本気で40日間頑張ろうと。で、やっぱりここを目標にやろうねと言っているのが、まず高校3年生になると、1日15時間くらいやるんだ。すごいでしょ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">15時間ですか。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">15時間。で、やっぱり高2の夏に勉強していない子が、高3の夏に15時間なんてやれないからさ。ここ、覚えておいてね、目標。「8時間」。8時間を40日、320時間。このくらいは、高校2年生の夏で難関目指すならやっていこうね、という話をしていてさ。そう、だからA君にもやってほしいんだよね。<br><br>ね、さっきちょっと「部活がある日は1日1時間やっているかやっていないかで」というお話をしていたけれど。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">それはいいんだよ、過去のことだから。で、ここからでもチャンスが来るわけだから、夏はそのくらい努力してほしいなと。それができれば、さっきのこの目標を達成できるんじゃないかなと思うんだけど、どうかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、やっぱりこう勉強時間をしっかりと作ってやっていければ、目標得点届くかな、という風に今思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">だよね。だからもうさ、本当に合格に近づく夏にできるように頑張ろうよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<!-- パート5 招待講習提案 -->
+<div class="part-divider">▶ パート５続き【50:38〜56:17】招待講習講座提案（5分39秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">で、最後にここから、じゃあ具体的な勉強内容として、さっき正解必須問題とかもあったけれどさ、A君がどんな勉強を具体的にやればいいかというのを、まあさっきちょっと「招待講習で」という話も、あったけれど、最後、具体的に細かく説明をしたいなと思っているんだよね。いい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい、お願いします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">うん、じゃあちょっとね、今から見るこのチラシを見てくれる。今回ちょっと説明したいのが、さっきからね、ちょくちょく話は出しているけれど、この「夏期特別招待講習」という、これね、無料対策授業。まあ今まで、課題分析を一緒にしてきたじゃない。そこで見えてきたものを、特に大事なことに関しては、具体的にしっかりこれで対策しちゃおう、と決めて実行したいなと。後回しにすると、人間やらずに終わったりするからさ、大丈夫かな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">で、概要だけちょっと改めてちょっと説明させてもらうと、東進の映像の授業だよね。これを8月のまず受講期限終わりまで、受けることができます。で、やっぱり、映像を使いながらやっている授業なので、河合塾に行っていると思うんだけど。受ける時間帯とか、日にちも選んだりできるんで、両立がすごくしやすい。そういう意味では本当に、他の塾に行っていても、ぜひ使って勉強してほしいなという風に思っています。で、ここから、最大で4つまで講座を取って対策できるんだよね、4つ。90分×5回の授業かな、1つの講座が。それを最大4つまで。ちょっと見てみて、色んなこう講座がバーッとあってさ。基礎からかなり応用難関まであるんだけれども。ちょっと講座をね、1つ1つ見ていくにあたって、課題簡単に言える？さっき、英語って何だったっけ、問題は？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">と、英語は単語とか、文法・語法の知識の部分が足りていない、ということですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね。で、実はちょっとじゃあそれを受けて、どういう勉強をしていけば対策になるかをちょっと紹介していい？<br><br>文法と語法に関してはね、僕は色々ある中でも、この『とことん分かる大学入試新・英文法』。この渡辺勝彦先生の講座。これをやってほしいなと思っていて。入試でよく狙われる、いわゆる重要な文法事項。ここをしっかりと、もう一回、演習と解説を通じてやり直す、という講座なのね。で、ねすごこの講座の良いところは、すごい受けていて楽しいし、狙われるところをちゃんとまとめてくれている、というところかな。そう、で、覚えてる？文法はちゃんと学んだ後、どういう勉強をしないと、定着したり応用が利かないってさっき説明したこと、覚えているかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">とも、短期じゃなくてこう繰り返しで何度もやって、長期にこう記憶を残せるように。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね、長期記憶にするっていうヤツだよね。さらに言うと、説明できるようにちゃんとしていると。それをこれでしっかりやり上げてほしいなと。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">うん。で、次ね、数学はどんな課題があったか覚えている？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">数学は1Aの確率と、2BCの三角関数。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね、そう。確率の方はね、結構場合の数は結構できていたんで、確率分野のちょっとこう、まあ標準以上くらいのレベルのところでつまずきがあるかなと思うんだよね。ここをね、対策する授業が、こっちのページのね、小さく書いてあるんだけど、この『受験数学入門講義確率編』。この講座で対策したいなと思っています。これは、3回の授業で、本当に今標準レベルから少しレベル高い問題まで、網羅的に確率を対策できるから、びったりだと思う、確率重要単元だからさ。で、三角関数は結構どう、ちょっと基礎に不安あるよね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、結構基本的なところから抜けてそうな気がします。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">うん、公式をちょっと忘れちゃった、と言っていたからさ。この『高等学校対応数学三角関数』で、これもね、志田先生というすごい人気の先生なんだけれども、この授業でしっかりもう一回学び直して、学んだら、やっぱり演習だよね、をやっていきたいなと思うんだよね。で、この三つ話したんで、あと一講座はA君が「これもやってみたい」とか「この対策してみたい」というのがあれば、それまた相談してくれたらさ、もちろんそれを勉強することも可能だからさ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">これが講座に関してだけど、なんか質問とか相談はある？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いや、今のところは大丈夫です。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">大丈夫？で、実はこの招待講習のすごいところは、この授業だけではなくて、もう一つね、「高速マスター」。ここに書いてあるヤツね。この高速マスター基礎力養成講座というこれがね、無料で勉強できるんですよ。これイメージ湧く？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">高速でマスター、なんかどういう勉強になるのかなって気になりましたね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">これはまさに、A君さっき「単語がやっぱりちょっと課題があるな」って話があったじゃない。英単語をとにかく、固めるカリキュラムです、高速で。これのカリキュラムのすごいところはさ、ちょっと見てこれ。去年のこの前あった共通テストの単語カバー率、これをやっておけばどのくらいの単語が分かるようになるか、なんだけれども、何パーセントですか、これ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">99.7%</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、99.7%なんだよね。つまり、もうほぼ分からない単語は、受験において、共通テストにおいて出ない、ところまでいけるんだよ。ちなみに校舎だと、これをどのくらいの期間で、1800個の英単語をしっかり習得しようねって指導していると思う？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">でもやっぱり単語帳1冊分となると、結構時間かかっちゃいそうなイメージです。なんか1ヶ月、2ヶ月くらいかかっちゃいそうなイメージです。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">通常のイメージそうだよね。驚いてほしいんだけど。「2週間」でしっかりやり上げる。で、一通り覚えた、完璧になった状態を作っていく、ということを演習を通じてやるカリキュラム、これが無料体験できる。英単語の問題解決するよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">確かに。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">しかもさ、瞬発的にさっき「ちょっと単語出せないから長文でつまずきながら読んでいた」みたいな話あったじゃない。これね、時間制限とかがあって、ゆっくり英単語を選んでいるともうブーッとバツになるんだよね。だから瞬発的に覚える、という練習にもなる。</span></div></div></div>
+
+<!-- パート5 2%の意義付け -->
+<div class="part-divider">▶ パート５続き【56:18〜60:11】2%の意義付け（3分53秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">で、実際ね、この高速マスターをしっかり学習していくと、どういう風に成績が上がっていくかというのは、実は東進ってさ、データがちゃんと取れるから全部示せるんだ。すごい参考になると思うから見てもらってもいい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、じゃあ今出しますね。これもうちょっと整理すると、これね、共通テストのリーディングとリスニングの得点。で、この高速マスターって、実はね、この「単語」、終わったら「熟語」、これクリアしたら「文法」を、最後「基本例文」。この基本という意味では、この4ステップが大きく分けてあるのね。<br><br>これらをちゃんとクリアした子が、どうやって点数が変わっていっているか、そういうデータ。ちょっと見ていくね。まずね、英単語を取っているこの点数の分布、取り方の分布はこうなります。ボリュームゾーンとしては、どのくらいが結構多い、結構この辺が山になっているよね。じゃあ、これが終わってちゃんと熟語に進んで、これをクリアしました、終えました、こうなると、こういう風に変わっていく。どう変化した？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">右側にずれてますね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なんかちょっとずつ、大きなこう山の部分が右側の方にずれていっているよね。つまり、取れる得点がどんどん高くなっているんだよね。で、文法になると結構急激に上がって、例文になるとこういう風になって、と推移していくんだよね。ここから導けるというか、言える結論って何？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">やればやるだけ、ちょっとこう点数につながっていくのかな、というのは思いました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだね。やればやるだけ基礎が固まると、得点が上がっていく。一方で、取れていない子ってどうなの、というところにちょっとフォーカスしたいと思うのね。で、まあこの基本をしっかり固める例文まで終わっている子はこうだけど、逆にちょっと見てみて。例文まで終わっているのに、基本の固めが終わっているのに、なかなか点が取れていない子の割合ってどうなのか、というところにちょっと着目したいと思うのね。それがいわゆるリスクだからさ。「やってもあまり上手くいかなかった」という。<br><br>じゃあちょっと見ていきたいと思うんだけど、それ例えばじゃあ、この「80点から100点」、この100点以下で見てみようかな。つまり、この緑色のグラフだね、緑色のグラフ。これを、この足してみて。この80点から160点から80点、40点から60点、これ足してみて、これ大体パーセントで大体何パーセントくらいかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">小さくて見づらいけど、大体2%とかそれくらいですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">大体2%くらいだよね、大体そのくらいなんだよね。言い換えると、98%の生徒は、しっかり基本を固め終わっていれば、少なくとも100点以上、得点は出せているよという言い換えもできるんだよね。ってなったら、A君普通にちゃんとやったら、どっちに入りそう？2%？98%？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ちゃんとやっていったら、その98%の方には入れると思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">なれるよね。なんならもうA君、一番こっちの180点とかの方に行けるんじゃないかなと思っているくらいだからさ。そう、だからやっぱり、しっかり早く基礎を固めることの重要性ってこういうところに見られるから、早くもう英語で8割、9割取れるようにしていこうよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、目指したいなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ちなみに、さっき「8月の模試で結果を出そう」って言ったじゃない。あそこの目標得点って、英語何点だったかって覚えてる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">英語が145点とかですか。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">正解、覚えているね。そうなんだよ。じゃあ、ちょっとここで見てほしいんだけれども、このしっかり基本のこの4ステップ、この基本例文まで高速マスターでクリアをしっかりしている子、この平均点ってこれ何点？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">158.4点。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよ、ということは。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">8月の段階で超えられるかもしれない、と。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんだよね。だから、ちゃんと基本をしっかり固め抜いていけば、目標得点というのは8月に達成十分できるんだよ。だからね、しっかり基本を大事にして、早く固めていってほしいなと思うんだよね。さらに言うとね、もうこれ米印で小さく書いてあったんだけど。数学計算演習と今日のコラムもできるよって書いてあってね。さらにね、国語と数学の演習もできるんですよ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうなんですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、だから、確率とか習い終わったら、三角関数習い終わったら、問題演習量を定期的にやらなきゃいけないってあったじゃない。これでしっかりやっていく、ということをやりたいなと思っています。これがね、夏期の特別招待講習です。</span></div></div></div>
+
+<!-- パート6 -->
+<div class="part-divider">▶ パート６【60:12〜66:06】まとめ・クロージング（5分54秒）</div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まとめるとね僕はね、A君がやっぱりしっかり自分で分析して、「ここは課題だな」というのを見つけてくれたから、やっぱりそこをね、ちゃんと具体的に対策して、学力をパッと上げていきたいなと。その応援をしたいなと思っているんだよね。<br><br>A君、今お話一通り説明聞いてどう思っている？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、やっぱりこう招待講習、なんかめちゃくちゃ色々できていいなという風には思ったんですけど、いったんちょっと自分で考えてみようかな、という風に思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">いったん考えようかな、と。わかりました。結構さ、僕もそうなんだけどさ、なんかこう、結構さ、後で考えようと思っていることって、人間ってさ、後回しにして考えず終わっちゃう、やらずに終わっちゃう、みたいなことが結構多いと思っていてさ。<br><br>今A君の目の前には、ちゃんとこれを乗り越えて克服すれば、大きく学力が上がるよというさ、もう宝の山が見えているわけじゃない。だから僕はA君に、少なくともこう真剣にこう考えてみて、対策打ってほしいなという風に思っているからこそ、聞きたいんだけれども。考えようかなと言ったのには、なんかこう実は、不安になっていることとか、心配していることとかあるんじゃないかなと思ってさ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、まあ今自分自身、河合塾にも行っている状態なので、そこでの勉強とか、また学校の勉強とか色々あるので。なんそれをやりながらってなった時にできるのかな、とか、まあそういう風なところはちょっと思っているので。それでちょっと考えようかなという風に思っています。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">真剣に考えているからこその悩みだよね。で、やっぱりちょっと両立が不安というのは思うかもしれないんだけれども、僕はね、ここはね、A君ならしっかりやりきれると思うよ。だって、目の前にまずチャンスが来るよって言ったじゃん。これ、何だっけ？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">夏休み、ですか。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そう、夏休みだよね。夏休みがしっかり来て、かつこの映像授業だから、受ける日付とか時間帯も選べるから、両立できると思うんだよね。だからしっかりとA君には、河合塾の勉強、まあ自分自身の勉強ももちろんあるだろうし。で、この東進の効率良い対策、これやっぱりしっかり全部やりきってほしいし。逆に言うとこうね、目の前に夏休みが来ている今がラストチャンスというか、このチャンスを逃すと、そういった色んなことを全部やりきるというのが難しくなる、というのもあるんじゃないかなと思うから。今こそこれをやってほしいなという風に思うんだよね。<br><br>あとA君、ちょっと心配していることも、違ったら申し訳ないんだけど、別にこれをやったから東進に入ろうねとか、そういうことではないからさ。僕はやっぱり今日面談してきて、本当に自分で考えて目標も設定しているし、そんなA君を是非全力で応援したいし、この模試でやっぱり「学力伸びたぞ」と言ってもらいたいなと。もうA君の学力が大きく伸びて、合格に近づけば何でもいいと思っているから、もうなんか、全部使えるものをなんか、むしろ使い切ってほしいなというそういう気持ちなんだよね。そう、だからこそなんか、これをぜひ活用してほしいなという風に思うんだよね。どう、自分は？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、まあ今こう言っていただいたようなことが、まあちょっと自分の中でも不安だったので、はい。まあただ、こう両立だったりとか、まあこの夏をしっかりと自分で成果につなげる、という風に思ったら、ちょっと頑張ってみたいなという風に今は思いました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">お、ありがとう、嬉しい！いや、A君なら絶対全部やりきれるから。本当に、全てをフル活用して、もう学力を伸ばすことだけを考えてやっていこうよ。そしたら素晴らしい夏になるからさ。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあしっかり一緒に頑張っていこうね。A君、最後改めて今聞きはしたけれどさ、このね、招待講習でちゃんと対策していくということに関してはさ、まあ改めてちょっと自分の今の気持ち言ってもらっていい？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあ、あと夏頑張らなきゃいけない課題というのも見えてきたので、特別招待講習、ぜひチャレンジしてみたいなという風に思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">じゃあやっていこうね。サポート全力でするから。でさ、あと1個だけちょっと想定なんだけど、今回この統一テストの返却面談ってことで、保護者の方はあれだよね、多分どういう風に今、この面談で何をしてくると思っていらっしゃる？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">成績をこう受け取ってくるくらいにしか、と思っていないですね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうだよね。だからちょっとこの招待講習をやるってなったらさ、まあどうだろう、どんな反応になるかね？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">びっくりはするんじゃないかなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">びっくりはするか。怒られたりはしない？「なんでこんなにやってるの？」みたいな。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">それはないですかね。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">それはないか。びっくりするかもしれないってことなんで、やっぱりA君が大事なのはなんだ、それは保護者に何て伝えることが大事？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">自分にとってこう必要なものだから、頑張るぞということをちゃんと伝えなきゃいけないかなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあそうだね、それはさ、僕もやっぱり、話はしたけれどさ、保護者をこう不安にさせたくないからさ。そこは自分がさ、「こういう趣旨でここの対策をちゃんとやりたいと思っているんだ、プラス無料です」というのをちゃんとさ、伝えてもらいたいんだけど、大丈夫？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">頑張って伝えようと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">まあそうだね。そしたら多分応援はしてくれると思うからさ。学力、とにかく伸ばしていこうね。A君にとって、合格に一気に近づくよ、この夏で。で最後ね、この対策を、この夏期特別招待講習を受ける子にはね、ガイダンスに出てもらって、授業の受け方とかどういうスケジュールでやっていくかというのを決めたいと思っているのね。大体まあ1時間くらいなんで、このガイダンスの日付だけさえ決めていいかな？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">はい。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そしたら、できればまあ早めが良いかなと思っていて。例えば明日とかだと、8時とかからガイダンスできるんだけどどう？明日とか、もしくは無理だったら明後日とか。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">明日8時だったら、部活が終わった後で来れるんじゃないかなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">あ、大丈夫？いいね、やる気あるじゃん。頑張っていこう。でもそのスピード感も大事だと思うよ。すぐ行動に移すということがね。じゃあね、筆記用具だけちょっと持ってきてくれる？そこでじゃあ色々説明するからさ。じゃあもう本当にね、今日色々1時間くらい話してきて、本当に僕も楽しかったし、A君ってやっぱり素晴らしいなと、こう頑張ってやろうという気持ちもあるし、色々考える力もあるし。ぜひね、この招待講習の期間、全力で応援させてもらいたいなと思いました。なんか感想とか最後終わりだから、言ってもらっていいですか？</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">そうですね、まあこう成績を見るのとか結構不安だったんですけど、やるべきこともよく明確になったので、ちょっとその夏、頑張っていきたいなと思います。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">本当に僕も嬉しいです。やって良かったです。明日ガイダンス来てもらって、招待講習も全力で応援するからさ。まあ何でもこの期間は相談してね。これで、帳票返却面談終わりにしたいと思います。本当に今日来てくれてありがとうね。</span></div></div></div>
+<div class="row student"><div class="bubble-avatar s">生</div><div class="bubble-wrap"><div class="bubble-name">生徒</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございました。</span></div></div></div>
+
+<div class="row teacher"><div class="bubble-avatar t">師</div><div class="bubble-wrap"><div class="bubble-name">先生</div><div class="bubble card"><span class="card-hint">タップして表示</span><span class="card-text">ありがとうございました。</span></div></div></div>
+
+</div><!-- end chat-window -->
+
+<script>
+  const cards = () => document.querySelectorAll('.bubble.card');
+
+  function updateCount() {
+    const total = cards().length;
+    const isAll = document.body.classList.contains('show-all');
+    const revealed = document.querySelectorAll('.bubble.card.revealed').length;
+    const shown = isAll ? total : revealed;
+    document.getElementById('count').textContent = `表示: ${shown} / ${total}`;
+  }
+
+  document.getElementById('btn-show-all').addEventListener('click', () => {
+    const isAll = document.body.classList.toggle('show-all');
+    document.getElementById('btn-show-all').textContent = isAll ? '全て隠す' : '全て表示';
+    updateCount();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    document.body.classList.remove('show-all');
+    document.getElementById('btn-show-all').textContent = '全て表示';
+    cards().forEach(b => b.classList.remove('revealed'));
+    updateCount();
+  });
+
+  cards().forEach(b => {
+    ['click', 'touchend'].forEach(evt => {
+      b.addEventListener(evt, (e) => {
+        e.preventDefault();
+        b.classList.toggle('revealed');
+        updateCount();
+      }, { passive: false });
+    });
+  });
+
+  updateCount();
+</script>
+</body>
+</html>
